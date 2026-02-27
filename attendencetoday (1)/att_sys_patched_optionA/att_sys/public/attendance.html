@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>📋 Record Attendance — Smart Attendance System</title>
+  <link rel="stylesheet" href="/style.css">
+
+  <style>
+    /* Extra enhancements just for this page */
+    .card {
+      transition: all 0.3s ease-in-out;
+    }
+    .card:hover {
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+      transform: translateY(-3px);
+    }
+    .table th {
+      text-align: center;
+      background: #e0e7ff;
+      color: #1e3a8a;
+    }
+    .table td {
+      text-align: center;
+      background: #f8fafc;
+      color: #111827;
+    }
+    .status-btn {
+      background-color: #16a34a;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.2s;
+      font-weight: 600;
+    }
+    .status-btn.absent {
+      background-color: #dc2626;
+    }
+    .status-btn:hover {
+      opacity: 0.85;
+    }
+    select, input[type="date"] {
+      background-color: #f1f5f9;
+      color: #111827;
+      border-radius: 8px;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      font-weight: 500;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container" style="background-color:white;">
+    <!-- Header -->
+    <div class="header" style="margin-bottom: 20px;">
+      <h2 style="color:#1e3a8a;">📋 Record Attendance</h2>
+      <a href="/dashboard.html" class="link" style="font-weight:600;">⬅️ Back to Dashboard</a>
+    </div>
+
+    <!-- Attendance Form -->
+    <div class="card" style="background-color:#ffffff; border:1px solid #e2e8f0;">
+      <p style="color:#334155; font-size:16px; margin-bottom:12px;">
+        Select your class and date below, then mark absentees by toggling their status.
+      </p>
+
+      <!-- Class and Date Selector -->
+      <div class="grid" style="margin-bottom:12px;">
+        <div>
+          <label style="color:#334155; font-weight:600;">Select Class:</label>
+          <select id="classSelect" required>
+            <option value="">-- Choose a Class --</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="color:#334155; font-weight:600;">Date:</label>
+          <input class="input" type="date" id="date" required />
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="row" style="margin-top:12px; gap: 12px;">
+        <button class="btn" id="addRow">➕ Add Student</button>
+        <button class="btn secondary" id="save">💾 Save Attendance</button>
+      </div>
+
+      <!-- Attendance Table -->
+      <table class="table" style="margin-top:20px; width:100%; border-radius:12px; overflow:hidden;">
+        <thead>
+          <tr>
+            <th>Student Name</th>
+            <th>USN</th>
+            <th>Gender</th>
+            <th>Status (Click to Toggle)</th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <!-- Dynamic rows go here -->
+        </tbody>
+      </table>
+
+      <!-- Message -->
+      <p id="msg" class="muted" style="margin-top:16px; font-weight:500;"></p>
+    </div>
+  </div>
+
+  <script src="/attendance.js"></script>
+</body>
+</html>

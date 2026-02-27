@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📊 Attendance Reports</title>
+
+  <!-- ✅ Modern Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- ✅ Base Styles -->
+  <link rel="stylesheet" href="/style.css" />
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+    }
+
+    .header h2 {
+      color: #1e3a8a;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .link {
+      text-decoration: none;
+      color: #2563eb;
+      font-weight: 600;
+      transition: color 0.3s;
+    }
+    .link:hover {
+      color: #1d4ed8;
+    }
+
+    .card {
+      margin-top: 24px;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 2fr 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    select, button {
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      font-size: 15px;
+      width: 100%;
+    }
+
+    button.btn {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.1s;
+    }
+
+    button.btn:hover {
+      background-color: #1d4ed8;
+    }
+
+    button.btn:active {
+      transform: scale(0.97);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    thead {
+      background-color: #2563eb;
+      color: white;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    tr:hover {
+      background-color: #f1f5f9;
+    }
+
+    #msg {
+      margin-top: 16px;
+      font-size: 14px;
+      color: #64748b;
+      text-align: center;
+    }
+
+    @media (max-width: 700px) {
+      .grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <!-- 🧠 Header Section -->
+    <div class="header">
+      <h2>📊 Attendance Reports</h2>
+      <a href="/dashboard.html" class="link">← Back to Dashboard</a>
+    </div>
+
+    <!-- 📋 Report Card -->
+    <div class="card">
+      <div class="grid" style="grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr; gap: 12px;">
+        <select id="classSelect">
+          <option value="">Loading classes...</option>
+        </select>
+
+        <select id="period">
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+        </select>
+
+        <select id="range">
+          <option value="0-100">All (0-100%)</option>
+          <option value="0-40">Low (0-40%)</option>
+          <option value="40-60">Medium (40-60%)</option>
+          <option value="60-80">Good (60-80%)</option>
+          <option value="80-100">Excellent (80-100%)</option>
+        </select>
+
+        <button id="load" class="btn">Load Report</button>
+        <button id="download" class="btn" style="background-color: #16a34a;">📥 PDF</button>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>USN</th>
+            <th>Presents</th>
+            <th>Total</th>
+            <th>Percentage (%)</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <!-- Data Rows Loaded Dynamically -->
+        </tbody>
+      </table>
+
+      <p id="msg">Select class and range, then click <strong>Load Report</strong> to view details.</p>
+    </div>
+  </div>
+
+  <script src="/reports.js"></script>
+</body>
+</html>

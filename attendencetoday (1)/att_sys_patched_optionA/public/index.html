@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Management System</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background:#eef2f7; color:#333; }
+    header { background:#0d47a1; color:white; padding:20px; text-align:center; }
+    .container { max-width:800px; margin:60px auto; text-align:center; }
+    .card { background:white; padding:40px; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.1); }
+    .card h2 { margin-bottom:10px; }
+    button { margin:10px; padding:12px 24px; font-size:16px; cursor:pointer; border-radius:6px; }
+    .btn-register { background:#1976d2; color:white; border:none; }
+    .btn-login { background:#388e3c; color:white; border:none; }
+    footer { font-size:0.9rem; color:#666; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="display:flex;align-items:center;justify-content:center;">
+      <!-- simple logo svg -->
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" stroke="#fff" stroke-width="2" fill="none"/>
+        <path d="M6 12l4 4 8-8" stroke="#fff" stroke-width="2" fill="none"/>
+      </svg>
+      <h1 style="margin-left:10px;">Attendance Management System</h1>
+    </div>
+  </header>
+  <div class="container">
+    <div class="card">
+      <h2>Welcome Teacher</h2>
+      <p>Manage classes, mark attendance, and view reports.</p>
+      <div class="actions">
+        <a href="/register"><button class="btn-register">Register as Teacher</button></a>
+        <a href="/login"><button class="btn-login">Login</button></a>
+      </div>
+    </div>
+  </div>
+  <footer style="text-align:center; margin-top:30px; color:#555; font-size:14px;">
+    <p>&copy; 2026 Attendance Management System</p>
+  </footer>
+</body>
+</html>

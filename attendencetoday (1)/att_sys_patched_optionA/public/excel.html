@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Excel Upload</title>
+<style>
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#1a202c;color:#edf2f7;margin:0;padding:0}
+header{background:#2d3748;padding:15px;display:flex;align-items:center}
+header a{color:#edf2f7;text-decoration:none;margin-right:20px}
+.container{max-width:800px;margin:30px auto;padding:20px}
+.dropzone{border:2px dashed #4a5568;padding:40px;text-align:center;border-radius:8px;background:#2d3748;cursor:pointer}
+.dropzone.hover{background:#4a5568}
+input[type=file]{display:none}
+select{padding:8px 12px;border-radius:4px;border:none}
+.btn{padding:8px 14px;background:#3182ce;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-right:10px}
+table{width:100%;border-collapse:collapse;background:#2d3748;color:#edf2f7}
+th,td{padding:10px;border:1px solid #4a5568;text-align:left}
+th{background:#1f2937}
+</style>
+</head>
+<body>
+<header>
+<a href="/dashboard.html">&larr; Back to Dashboard</a>
+<h1>Excel Upload</h1>
+</header>
+<div class="container">
+<div class="dropzone" id="dropzone">Click or drop Excel file here</div>
+<input type="file" id="fileInput" accept=".xlsx" />
+<div style="margin-top:20px;">
+<label>Upload Type: <select id="uploadType"><option value="classes">Classes/Students</option><option value="attendance">Attendance</option></select></label>
+</div>
+<div style="margin-top:20px;">
+<button class="btn" id="uploadBtn">Upload File</button>
+</div>
+<div style="margin-top:30px;padding-top:20px;border-top:1px solid #4a5568;">
+<h2 style="margin:0 0 12px 0;font-size:20px;">Real-Time Report</h2>
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+<select id="classSelect"><option value="">Loading classes...</option></select>
+<select id="periodSelect"><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>
+<select id="rangeSelect"><option value="0-100">All (0-100%)</option><option value="0-50">0-50%</option><option value="50-100">50-100%</option></select>
+<button class="btn" id="generateReportBtn">Generate Report</button>
+<button class="btn" id="downloadReportBtn">Download Report PDF</button>
+</div>
+</div>
+<div style="margin-top:20px;overflow:auto;">
+<table id="reportTable">
+<thead><tr><th>Name</th><th>USN</th><th>Presents</th><th>Absents</th><th>Total</th><th>Percentage (%)</th></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+<div id="result" style="margin-top:20px;color:#cbd5e0"></div>
+</div>
+<script>
+const drop = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const classSelect = document.getElementById('classSelect');
+const periodSelect = document.getElementById('periodSelect');
+const rangeSelect = document.getElementById('rangeSelect');
+const reportTbody = document.querySelector('#reportTable tbody');
+let selectedFile=null;
+['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('hover')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('hover')}));
+drop.addEventListener('drop',ev=>{selectedFile=ev.dataTransfer.files[0];drop.textContent=selectedFile.name});
+drop.addEventListener('click',()=>fileInput.click());
+fileInput.addEventListener('change',()=>{selectedFile=fileInput.files[0];drop.textContent=selectedFile.name});
+
+uploadBtn.addEventListener('click',async()=>{
+ if(!selectedFile){alert('choose file');return;}
+ const fd=new FormData();
+ fd.append('file',selectedFile);
+ try{
+  const res=await fetch('/upload-excel',{method:'POST',body:fd});
+  const data=await res.json();
+  renderUploadResult(data);
+ }catch(err){document.getElementById('result').textContent='Error: '+err.message;}
+});
+
+function renderUploadResult(data){
+  const container=document.getElementById('result');
+  container.innerHTML='';
+  if(data.added && data.added.length){
+    const h=document.createElement('h3'); h.textContent='Added'; container.appendChild(h);
+    const tbl=document.createElement('table'); tbl.style.width='100%'; tbl.style.borderCollapse='collapse';
+    const headerRow=tbl.insertRow(); ['USN','Name','ClassId'].forEach(t=>{const th=document.createElement('th');th.textContent=t;th.style.border='1px solid #ddd';th.style.padding='4px';headerRow.appendChild(th);});
+    data.added.forEach(r=>{const row=tbl.insertRow();[r.usn,r.name,r.classId].forEach(v=>{const cell=row.insertCell();cell.textContent=v;cell.style.border='1px solid #ddd';cell.style.padding='4px';});});
+    container.appendChild(tbl);
+  }
+  if(data.rejected && data.rejected.length){
+    const h=document.createElement('h3'); h.textContent='Rejected'; container.appendChild(h);
+    const tbl=document.createElement('table'); tbl.style.width='100%'; tbl.style.borderCollapse='collapse';
+    const headerRow=tbl.insertRow(); ['reason'].forEach(t=>{const th=document.createElement('th');th.textContent=t;th.style.border='1px solid #ddd';th.style.padding='4px';headerRow.appendChild(th);});
+    data.rejected.forEach(r=>{const row=tbl.insertRow();const cell=row.insertCell();cell.textContent=JSON.stringify(r);cell.style.border='1px solid #ddd';cell.style.padding='4px';});
+    container.appendChild(tbl);
+  }
+  if(!data.added.length && !data.rejected.length){
+    container.textContent='No rows processed';
+  }
+}
+
+async function loadClasses() {
+  classSelect.innerHTML = '<option value="">Loading classes...</option>';
+  try {
+    const resp = await fetch('/classes');
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Failed to load classes');
+    if (!Array.isArray(data) || !data.length) {
+      classSelect.innerHTML = '<option value="">No classes available</option>';
+      return;
+    }
+    classSelect.innerHTML = '<option value="">-- Select Class --</option>';
+    data.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.display || c.name || `Class ${c.id}`;
+      classSelect.appendChild(opt);
+    });
+  } catch (err) {
+    classSelect.innerHTML = '<option value="">Error loading classes</option>';
+  }
+}
+
+function renderReportRows(rows) {
+  reportTbody.innerHTML = '';
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="6">No rows found for selected filters</td>';
+    reportTbody.appendChild(tr);
+    return;
+  }
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const pct = r.total ? Math.round((r.presents / r.total) * 100) : 0;
+    const abs = r.absents != null ? r.absents : (r.total - r.presents);
+    tr.innerHTML =
+      `<td>${r.name}</td>` +
+      `<td>${r.usn}</td>` +
+      `<td>${r.presents}</td>` +
+      `<td>${abs}</td>` +
+      `<td>${r.total}</td>` +
+      `<td>${pct}%</td>`;
+    reportTbody.appendChild(tr);
+  });
+}
+
+async function generateReport() {
+  const classId = classSelect.value;
+  if (!classId) {
+    alert('Please select a class first');
+    return;
+  }
+  const period = periodSelect.value;
+  const range = rangeSelect.value;
+  const url = `/reports?classId=${classId}&period=${period}&range=${range}`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Failed to generate report');
+    renderReportRows(data.rows || []);
+  } catch (err) {
+    alert('Failed to generate report: ' + err.message);
+  }
+}
+
+async function downloadReportPdf() {
+  const classId = classSelect.value;
+  if (!classId) {
+    alert('Please select a class first');
+    return;
+  }
+  const period = periodSelect.value;
+  const range = rangeSelect.value;
+  const url = `/reports/download?classId=${classId}&period=${period}&range=${range}`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('Network error');
+    const blob = await resp.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `attendance_report_class_${classId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    link.remove();
+  } catch (err) {
+    alert('Failed to download PDF: ' + err.message);
+  }
+}
+
+document.getElementById('generateReportBtn').addEventListener('click', generateReport);
+document.getElementById('downloadReportBtn').addEventListener('click', downloadReportPdf);
+loadClasses();
+
+</script>
+</body>
+</html>

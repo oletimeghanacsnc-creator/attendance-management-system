@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Reports - Patched</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    select, button { padding: 8px; margin: 6px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+  <h2>Attendance Reports (Patched)</h2>
+  <label>Class: <select id="classSelect"></select></label>
+  <label>Period: <select id="periodSelect"><option value="7">Weekly (7)</option><option value="30">Monthly (30)</option></select></label>
+  <label>Range: <select id="rangeSelect"><option value="0-100">All</option><option value="40-60">40%-60%</option><option value="60-80">60%-80%</option><option value="80-100">80%-100%</option></select></label>
+  <button id="loadReport">Load Report</button>
+  <button id="downloadReport">Download Attendance (PDF)</button>
+
+  <div id="result"></div>
+
+<script>
+async function loadClasses() {
+  const res = await fetch('http://localhost:3001/classes');
+  const classes = await res.json();
+  const sel = document.getElementById('classSelect');
+  classes.forEach(c => {
+    const opt = document.createElement('option'); opt.value = c.id; opt.text = c.name + (c.section? ' - '+c.section : ''); sel.appendChild(opt);
+  });
+}
+async function loadReport() {
+  const classId = document.getElementById('classSelect').value;
+  const period = document.getElementById('periodSelect').value;
+  const range = document.getElementById('rangeSelect').value;
+  const res = await fetch(`http://localhost:3001/reports?classId=${classId}&period=${period}&range=${range}`);
+  const data = await res.json();
+  const container = document.getElementById('result');
+  if (!data.rows) { container.innerText = 'No data'; return; }
+  let html = '<table><tr><th>USN</th><th>Name</th><th>Presents</th><th>Total</th><th>Percentage</th></tr>';
+  data.rows.forEach(r => {
+    html += `<tr><td>${r.usn}</td><td>${r.name}</td><td>${r.presents}</td><td>${r.total}</td><td>${r.percentage}%</td></tr>`;
+  });
+  html += '</table>';
+  container.innerHTML = html;
+}
+
+document.getElementById('loadReport').addEventListener('click', loadReport);
+document.getElementById('downloadReport').addEventListener('click', () => {
+  const classId = document.getElementById('classSelect').value;
+  const period = document.getElementById('periodSelect').value;
+  const range = document.getElementById('rangeSelect').value;
+  const url = `http://localhost:3001/reports/download?classId=${classId}&period=${period}&range=${range}`;
+  window.location = url;
+});
+
+loadClasses();
+</script>
+</body>
+</html>

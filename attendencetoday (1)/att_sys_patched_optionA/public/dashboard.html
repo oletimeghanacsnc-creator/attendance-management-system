@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Dashboard</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin:0; background:#f4f7fb; color:#333; }
+    header { background:#0066cc; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; color:#fff; }
+    header h1 { margin:0; font-size:1.5rem; }
+    header nav a { color:#fff; text-decoration:none; margin-left:15px; }
+    .container { padding:20px; max-width:1200px; margin:auto; }
+    .cards { display:flex; flex-wrap:wrap; gap:20px; justify-content:center; }
+    .card { background:#fff; border-radius:8px; padding:20px; flex:1 1 250px; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+    .card h3 { margin-top:0; color:#0066cc; }
+    .btn { display:inline-block; padding:10px 18px; background:#0066cc; color:white; border:none; border-radius:4px; text-decoration:none; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="display:flex;align-items:center;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" stroke="#fff" stroke-width="2" fill="none"/>
+        <path d="M6 12l4 4 8-8" stroke="#fff" stroke-width="2" fill="none"/>
+      </svg>
+      <h1 style="margin:0 20px;">Teacher Dashboard</h1>
+    </div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="#" onclick="logout()" style="background:#e53e3e; padding:6px 12px; border-radius:4px;">Logout</a>
+    </nav>
+  </header>
+  <div class="container">
+    <p>Welcome back, <strong>Teacher</strong>!</p>
+    <h2>Manage Your Classes and Attendance</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Class Management</h3>
+        <p>Add and manage class details for your subjects, sections, and hours.</p>
+        <button class="btn" id="classMgmtBtn">Upload Class Details</button>
+      </div>
+      <div class="card">
+        <h3>Record Attendance</h3>
+        <p>Easily mark absentees — all others are set present by default.</p>
+        <a href="/attendance.html" class="btn">Record Attendance</a>
+      </div>
+      <div class="card">
+        <h3>Reports</h3>
+        <p>View weekly and monthly attendance summaries for your classes.</p>
+        <a href="/reports.html" class="btn">View Reports</a>
+      </div>
+      <div class="card">
+        <h3>Excel Upload</h3>
+        <p>Upload Excel (xlsx) file to import classes and students in bulk. Max 60 students per class.</p>
+        <a href="/excel.html" class="btn">Upload Excel</a>
+      </div>
+    </div>
+  </div>
+    <style>
+      /* modal styles */
+      #classModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; }
+      #classModal .modal-content { background:#fff; padding:20px; border-radius:8px; max-width:700px; width:90%; }
+      #classModal .close { float:right; cursor:pointer; font-size:18px; }
+    </style>
+
+    <div id="classModal">
+      <div class="modal-content">
+        <span class="close" id="closeModal">&times;</span>
+        <h2>Add New Class</h2>
+        <div class="form-grid">
+          <input type="text" id="className" placeholder="Class Name (e.g., CSE 2nd Year)">
+          <input type="text" id="section" placeholder="Section (e.g., A)">
+          <input type="text" id="subjectCode" placeholder="Subject Code (e.g., CS201)">
+          <input type="text" id="subjectName" placeholder="Subject Name (e.g., Data Structures)">
+          <input type="number" id="hours" placeholder="No. of Hours per Week" class="full">
+        </div>
+        <button class="btn" id="saveClassBtn">💾 Save Class</button>
+        <div id="feedback" style="color:green; display:none; margin-top:10px;">Class saved successfully!</div>
+        <h3 style="margin-top:20px;">Your Classes</h3>
+        <table id="classesTable" style="width:100%; border-collapse:collapse;">
+          <thead><tr><th>CLASS</th><th>SECTION</th><th>CODE</th><th>SUBJECT</th><th>HOURS</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      const storageKey = 'classManagementData';
+      const loadData = () => JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const saveData = data => localStorage.setItem(storageKey, JSON.stringify(data));
+      const classKey = (r) => `${(r.className||'').trim().toLowerCase()}|${(r.section||'').trim().toLowerCase()}|${(r.subjectCode||'').trim().toLowerCase()}|${(r.subjectName||'').trim().toLowerCase()}`;
+
+      async function upsertClassToServer(r) {
+        const resp = await fetch('/classes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            className: r.className,
+            section: r.section,
+            subjectCode: r.subjectCode,
+            subjectName: r.subjectName,
+            hours: r.hours
+          })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.error) throw new Error(data.error || 'Failed to save class');
+        return data; // {id, display, ...}
+      }
+
+      async function syncMissingServerIds() {
+        const rows = loadData();
+        let changed = false;
+        for (const r of rows) {
+          if (!r.id) {
+            try {
+              const saved = await upsertClassToServer(r);
+              r.id = saved.id;
+              changed = true;
+            } catch (e) {
+              // keep local copy; user can retry by saving again
+              console.warn('Failed to sync class to server', e);
+            }
+          }
+        }
+        if (changed) saveData(rows);
+      }
+      const renderTable = () => {
+        const rows = loadData();
+        const tbody = document.querySelector('#classesTable tbody');
+        tbody.innerHTML = '';
+        // de-dup local rows so dropdown/table doesn't repeat
+        const seen = new Set();
+        rows.filter(r => {
+          const key = classKey(r);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).forEach(r => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${r.className}</td><td>${r.section}</td><td>${r.subjectCode}</td><td>${r.subjectName}</td><td>${r.hours}</td>`;
+          tbody.appendChild(tr);
+        });
+      };
+      document.getElementById('classMgmtBtn').addEventListener('click', () => {
+        document.getElementById('classModal').style.display = 'flex';
+      });
+      document.getElementById('closeModal').addEventListener('click', () => {
+        document.getElementById('classModal').style.display = 'none';
+      });
+      document.getElementById('saveClassBtn').addEventListener('click', async () => {
+        const className = document.getElementById('className').value.trim();
+        const section = document.getElementById('section').value.trim();
+        const subjectCode = document.getElementById('subjectCode').value.trim();
+        const subjectName = document.getElementById('subjectName').value.trim();
+        const hours = document.getElementById('hours').value.trim();
+        if (!className || !section || !subjectCode || !subjectName || !hours) return;
+        const row = { className, section, subjectCode, subjectName, hours };
+        try {
+          const saved = await upsertClassToServer(row);
+          const data = loadData();
+          data.push({ ...row, id: saved.id });
+          // de-dup after adding
+          const deduped = [];
+          const seen = new Set();
+          for (const r of data) {
+            const key = classKey(r);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            deduped.push(r);
+          }
+          saveData(deduped);
+          renderTable();
+          document.getElementById('feedback').style.display = 'block';
+          setTimeout(()=> document.getElementById('feedback').style.display = 'none', 2000);
+          document.querySelectorAll('#className,#section,#subjectCode,#subjectName,#hours').forEach(i=>i.value='');
+        } catch (e) {
+          alert('Failed to save class: ' + e.message);
+        }
+      });
+      // On open, sync any old local classes to server so Attendance dropdown works
+      syncMissingServerIds().finally(renderTable);
+      function logout() {
+        window.location.href = '/';
+      }
+    </script>
+</body>
+</html>
