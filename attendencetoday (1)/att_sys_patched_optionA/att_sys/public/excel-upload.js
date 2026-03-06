@@ -1,454 +1,454 @@
-// ================================
-// 📤 Excel Upload Script
-// ================================
-
-// 🔐 Verify authentication
 const token = localStorage.getItem('token');
-if (!token) {
-  location.href = '/login.html';
-}
+if (!token) location.href = '/login.html';
 
-// 🎯 Element references
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
-const uploadBtn = document.getElementById('uploadBtn');
+const uploadType = document.getElementById('uploadType');
+const generateBtn = document.getElementById('generateBtn');
+const downloadBtn = document.getElementById('downloadBtn');
 const resultBox = document.getElementById('resultBox');
 const resultTitle = document.getElementById('resultTitle');
 const resultContent = document.getElementById('resultContent');
+const reportGraph = document.getElementById('reportGraph');
+const graphBars = document.getElementById('graphBars');
+let latestReportRows = [];
+let latestReportTitle = '';
 
 let selectedFile = null;
 
-// 📁 File selection handlers
-uploadArea.addEventListener('click', () => fileInput.click());
+function updateActionButtons() {
+  const canGenerate = Boolean(selectedFile);
+  generateBtn.disabled = !canGenerate;
+}
 
-fileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    handleFileSelect(file);
+function isPdf(file) {
+  if (!file) return false;
+  return file.type === 'application/pdf' || String(file.name || '').toLowerCase().endsWith('.pdf');
+}
+
+function norm(v) {
+  return String(v || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function showResult(type, title, html) {
+  resultBox.className = `result-box ${type}`;
+  resultTitle.textContent = title;
+  resultContent.innerHTML = html;
+  if (reportGraph) reportGraph.style.display = 'none';
+  if (type !== 'success') {
+    latestReportRows = [];
+    latestReportTitle = '';
   }
-});
+}
 
-// 🎯 Drag and drop handlers
+function showUploadSuccess() {
+  resultBox.className = 'result-box plain';
+  resultTitle.textContent = '';
+  resultContent.innerHTML = '<p>the file is uploaded sucessfully</p>';
+  if (reportGraph) reportGraph.style.display = 'none';
+}
+
+function getValue(row, keys) {
+  const map = {};
+  Object.keys(row).forEach((k) => { map[norm(k)] = k; });
+  for (const key of keys) {
+    const real = map[norm(key)];
+    if (real && row[real] !== undefined && row[real] !== null && String(row[real]).trim() !== '') {
+      return row[real];
+    }
+  }
+  return '';
+}
+
+async function fetchClasses() {
+  const res = await fetch('/api/classes', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to load classes');
+  return data;
+}
+
+function parseDate(value) {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  if (typeof value === 'number') {
+    const base = new Date(Date.UTC(1899, 11, 30));
+    base.setUTCDate(base.getUTCDate() + value);
+    return base.toISOString().slice(0, 10);
+  }
+  const str = String(value).trim();
+  const d = new Date(str);
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+
+  const m = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (!m) return new Date().toISOString().slice(0, 10);
+  const day = m[1].padStart(2, '0');
+  const mon = m[2].padStart(2, '0');
+  const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+  return `${year}-${mon}-${day}`;
+}
+
+function parsePresent(value) {
+  const v = String(value || '').trim().toLowerCase();
+  return v === '1' || v === 'yes' || v === 'y' || v === 'present' || v === 'p' || v === 'true';
+}
+
+uploadArea.addEventListener('click', () => fileInput.click());
 uploadArea.addEventListener('dragover', (e) => {
   e.preventDefault();
   uploadArea.classList.add('dragover');
 });
-
-uploadArea.addEventListener('dragleave', () => {
-  uploadArea.classList.remove('dragover');
-});
-
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
 uploadArea.addEventListener('drop', (e) => {
   e.preventDefault();
   uploadArea.classList.remove('dragover');
-  
-  const file = e.dataTransfer.files[0];
-  if (file && file.name.endsWith('.xlsx')) {
-    fileInput.files = e.dataTransfer.files;
-    handleFileSelect(file);
-  } else {
-    showError('Please select a valid .xlsx file');
-  }
+  if (!e.dataTransfer.files.length) return;
+  fileInput.files = e.dataTransfer.files;
+  fileInput.dispatchEvent(new Event('change'));
 });
 
-// 📄 Handle file selection
-function handleFileSelect(file) {
-  if (!file.name.endsWith('.xlsx')) {
-    showError('Please select a valid Excel file (.xlsx format)');
-    return;
-  }
-
-  selectedFile = file;
-  uploadArea.innerHTML = `
-    <div class="upload-icon">✅</div>
-    <p style="font-size: 1.2rem; margin: 12px 0;">
-      <strong>${file.name}</strong>
-    </p>
-    <p style="color: #94a3b8; font-size: 0.9rem;">
-      Size: ${(file.size / 1024).toFixed(2)} KB
-    </p>
-    <p style="color: #3b82f6; font-size: 0.9rem; margin-top: 8px;">
-      Click to select a different file
-    </p>
-  `;
-  uploadArea.addEventListener('click', () => fileInput.click());
-  uploadBtn.disabled = false;
-  resultBox.className = 'result-box';
-}
-
-// 📤 Upload file
-uploadBtn.addEventListener('click', async () => {
-  if (!selectedFile) {
-    showError('Please select a file first');
-    return;
-  }
-
-  uploadBtn.disabled = true;
-  uploadBtn.textContent = '⏳ Uploading...';
-  resultBox.className = 'result-box';
-
-  try {
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-
-    const res = await fetch('http://localhost:3001/upload-excel', {
-      method: 'POST',
-      body: formData
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || 'Upload failed');
-    }
-
-    // Show results
-    showResults(data);
-
-  } catch (err) {
-    console.error('Upload error:', err);
-    showError(err.message || 'Failed to upload file. Please try again.');
-  } finally {
-    uploadBtn.disabled = false;
-    uploadBtn.textContent = '📤 Upload File';
-  }
-});
-
-// ✅ Show success results
-function showResults(data) {
-  resultBox.className = 'result-box success';
-  resultTitle.textContent = '✅ Upload Complete!';
-  
-  let html = '';
-  
-  if (data.added && data.added.length > 0) {
-    html += `<div style="margin-bottom: 20px;">
-      <h4 style="color: #22c55e; margin-bottom: 8px;">
-        ✅ Successfully Added (${data.added.length})
-      </h4>
-      <div class="added-list">
-        ${data.added.map(item => 
-          `<div class="added-item">
-            <strong>${item.name}</strong> (USN: ${item.usn}) - Class ID: ${item.classId}
-          </div>`
-        ).join('')}
-      </div>
-    </div>`;
-  }
-
-  if (data.rejected && data.rejected.length > 0) {
-    html += `<div>
-      <h4 style="color: #ef4444; margin-bottom: 8px;">
-        ❌ Rejected (${data.rejected.length})
-      </h4>
-      <div class="rejected-list">
-        ${data.rejected.map(item => 
-          `<div class="rejected-item">
-            <strong>${item.name || 'Unknown'}</strong> (USN: ${item.usn || 'N/A'})<br>
-            <small>Reason: ${item.reason || 'Unknown error'}</small>
-          </div>`
-        ).join('')}
-      </div>
-    </div>`;
-  }
-
-  if (!data.added || data.added.length === 0) {
-    html = '<p>No students were added. Please check your file format and try again.</p>';
-  }
-
-  resultContent.innerHTML = html;
-}
-
-// ❌ Show error
-function showError(message) {
-  resultBox.className = 'result-box error';
-  resultTitle.textContent = '❌ Upload Failed';
-  resultContent.innerHTML = `<p>${message}</p>`;
-}
-
-
-
-
-// New buttons for report generation & PDF
-const generateReportBtn = document.createElement('button');
-generateReportBtn.id = 'generateReportBtn';
-generateReportBtn.textContent = '📈 Generate Report';
-generateReportBtn.className = 'btn';
-generateReportBtn.disabled = true;
-uploadBtn.parentNode.insertBefore(generateReportBtn, uploadBtn.nextSibling);
-
-const downloadPdfBtn = document.createElement('button');
-downloadPdfBtn.id = 'downloadPdfBtn';
-downloadPdfBtn.textContent = '📄 Download Report PDF';
-downloadPdfBtn.className = 'btn';
-downloadPdfBtn.disabled = true;
-uploadBtn.parentNode.insertBefore(downloadPdfBtn, generateReportBtn.nextSibling);
-
-// Enable buttons when file selected
 fileInput.addEventListener('change', () => {
-  uploadBtn.disabled = !fileInput.files.length;
-  generateReportBtn.disabled = !fileInput.files.length;
-  downloadPdfBtn.disabled = !fileInput.files.length;
-});
+  selectedFile = fileInput.files[0] || null;
+  updateActionButtons();
+  uploadArea.classList.toggle('has-file', Boolean(selectedFile));
+  if (!selectedFile) return;
 
-// Function to upload attendance excel to server and insert into attendance table
-async function uploadAttendanceExcel() {
-  if (!fileInput.files.length) return alert('Select a file first');
-  const fd = new FormData();
-  fd.append('file', fileInput.files[0]);
-
-  const resp = await fetch('/upload-attendance-excel', { method: 'POST', body: fd });
-  const data = await resp.json();
-  if (!resp.ok) {
-    showError(data.error || 'Upload failed');
+  const lower = String(selectedFile.name || '').toLowerCase();
+  if (!lower.endsWith('.xlsx') && !lower.endsWith('.pdf')) {
+    selectedFile = null;
+    fileInput.value = '';
+    updateActionButtons();
+    showResult('error', 'Unsupported File', 'Please upload .xlsx or .pdf file.');
     return;
   }
-  // show result summary
-  resultBox.className = 'result-box success';
-  resultTitle.textContent = '✅ Attendance Uploaded';
-  resultContent.innerHTML = `<p>Added: ${data.added} records. Skipped: ${data.skipped}.</p>`;
-  return data;
+
+  uploadArea.innerHTML = `
+    <div class="file-status">
+      <div class="file-check">✓</div>
+      <div>
+        <p class="file-name">${selectedFile.name}</p>
+        <p class="muted" style="margin-top:4px;">Size: ${Math.round(selectedFile.size / 1024)} KB</p>
+        <p class="muted" style="margin-top:4px;">Click to select a different file</p>
+      </div>
+    </div>
+  `;
+});
+
+uploadType.addEventListener('change', () => {
+  updateActionButtons();
+});
+
+async function handleSummary(rows) {
+  const parsed = rows.map((r) => {
+    const usn = String(getValue(r, ['usn', 'u_sn'])).trim();
+    const name = String(getValue(r, ['studentname', 'name'])).trim();
+    const ch = Number(getValue(r, ['ch', 'classesheld'])) || 0;
+    const cf = Number(getValue(r, ['cf', 'classesfaced', 'classesattended'])) || 0;
+    const percentage = ch > 0 ? Number(((cf / ch) * 100).toFixed(2)) : 0;
+    return { usn, name, ch, cf, percentage };
+  }).filter((x) => x.usn || x.name);
+
+  if (!parsed.length) {
+    showResult('error', 'Invalid Summary File', 'No valid summary rows found.');
+    return;
+  }
+
+  latestReportRows = parsed;
+  latestReportTitle = 'Attendance Summary Report';
+
+  const table = `
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Name</th><th>USN</th><th>Total classes</th><th>Total present classes</th><th>Percentage</th></tr>
+        </thead>
+        <tbody>
+          ${parsed.map((x) => `<tr><td>${x.name}</td><td>${x.usn}</td><td>${x.ch}</td><td>${x.cf}</td><td>${x.percentage}%</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  showResult('success', 'Summary Parsed', `${table}<p style="margin-top:10px;">Summary format is for analysis preview. Use Daily format to write attendance to database.</p>`);
+
+  // Render bar graph below the table
+  renderGraph(parsed);
 }
 
-// Generate report button: upload attendance then open reports page
-generateReportBtn && generateReportBtn.addEventListener('click', async () => {
-  generateReportBtn.disabled = true;
-  const r = await uploadAttendanceExcel();
-  generateReportBtn.disabled = false;
-  if (r && r.added>=0) {
-    // open reports page in new tab
-    window.open('/reports_patched.html', '_blank');
-  }
-});
-
-// Download PDF button: upload attendance then trigger PDF download for the class if possible
-downloadPdfBtn && downloadPdfBtn.addEventListener('click', async () => {
-  downloadPdfBtn.disabled = true;
-  const r = await uploadAttendanceExcel();
-  downloadPdfBtn.disabled = false;
-  if (r) {
-    // Open reports download; require user to choose class/period/range in reports page, so open it
-    window.open('/reports_patched.html', '_blank');
-  }
-});
-
-
-
-// ========================
-// Client-side Excel parsing (SheetJS)
-// ========================
-
-// Utility: normalize header keys
-function norm(k){ return k ? k.toString().trim().toLowerCase().replace(/\s+/g,'') : ''; }
-
-// Parse Excel in-browser and prepare marks payload for /attendance/mark
-async function parseAndSendExcel() {
-  if (!fileInput.files.length) return showError('Please select a file first');
-  const file = fileInput.files[0];
-  const reader = new FileReader();
-  reader.onload = async function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, {type:'array'});
-      const sheetName = wb.SheetNames[0];
-      const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, {defval: ''});
-      if (!rows || !rows.length) return showError('No data in Excel');
-
-      // Detect format:
-      // 1) Per-date attendance rows: expect Date and Present (or P)
-      // 2) Summary rows: CH and CF present -> compute percentages and show locally
-      const headerKeys = Object.keys(rows[0]).map(k => norm(k));
-      const hasDate = headerKeys.some(k => k.includes('date'));
-      const hasPresent = headerKeys.some(k => k.includes('present') || k === 'p' || k === 'presentstatus');
-      const hasCH = headerKeys.some(k => k === 'ch' || k.includes('classesheld'));
-      const hasCF = headerKeys.some(k => k === 'cf' || k.includes('classesfaced') || k.includes('classesattended'));
-
-      // Try to get className and section header names
-      let classKeys = headerKeys.filter(k => k.includes('class') || k.includes('classname'));
-      let sectionKeys = headerKeys.filter(k => k.includes('section') && !k.includes('subject'));
-
-      // If summary (CH/CF) found, compute percentage and show result; ask user to upload per-date Excel for DB insertion
-      if (hasCH && hasCF && (!hasDate || !hasPresent)) {
-        // compute percentages
-        const results = rows.map(r => {
-          const keys = Object.keys(r);
-          const lk = {};
-          keys.forEach(k=> lk[norm(k)]=k);
-          const chv = Number((r[lk['ch']||lk['classesheld']||lk['classeshelds']]||r[lk['classesheld']]||r[lk['classeshelds']]||0)) || Number(r[lk['classesheld']]||0) || 0;
-          const cfv = Number((r[lk['cf']||lk['classesfaced']||lk['classesattended']]||0)) || 0;
-          const usn = r[lk['usn']||lk['usn']||lk['unique student number']||'USN'] || r[lk['usn']||'usn'] || '';
-          const name = r[lk['studentname']||lk['name']||'name'] || '';
-          const perc = chv>0 ? Math.round((cfv/chv)*10000)/100 : 0;
-          return { usn, name, ch: chv, cf: cfv, percentage: perc };
-        });
-
-        resultBox.className = 'result-box success';
-        resultTitle.textContent = '📊 Summary computed (CH/CF present)';
-        resultContent.innerHTML = '<div style="max-height:300px;overflow:auto">'+
-          '<table style="width:100%;border-collapse:collapse"><tr><th>Name</th><th>USN</th><th>CH</th><th>CF</th><th>%</th></tr>'+
-          results.map(r=>`<tr><td>${r.name}</td><td>${r.usn}</td><td>${r.ch}</td><td>${r.cf}</td><td>${r.percentage}%</td></tr>`).join('')+
-          '</table></div><p style="margin-top:8px;color:#cbd5e1">Note: To store per-date attendance into the database, the Excel must include Date and Present columns (one row per student per date).</p>';
-
-        return { summary: true, results };
-      }
-
-      // If per-date format detected, group by date and post to /attendance/mark
-      if (hasDate && hasPresent) {
-        // Build payload grouped by (classId/date). But first need to map className+section to classId by asking server for classes
-        // We'll request /classes (server_patched.js exposes GET /classes)
-        const classesResp = await fetch('/classes');
-        const classes = classesResp.ok ? await classesResp.json() : [];
-        const classMap = {}; // key: classname|section -> id
-        classes.forEach(c=> classMap[(c.class_name||c.classname||c.name)+'|'+(c.section||'')]=c.id);
-
-        // Prepare marks grouped by date and classId
-        const grouped = {}; // key = classId|date -> { classId, date, marks: [] }
-        for (const r of rows) {
-          const keys = Object.keys(r);
-          const lk = {}; keys.forEach(k=> lk[norm(k)]=k);
-          const className = (r[lk['classname']||lk['class']||lk['classname']]||'').toString().trim();
-          const section = (r[lk['section']||'section']||'').toString().trim();
-          const usn = (r[lk['usn']||'usn']||'').toString().trim();
-          const dateRaw = (r[lk['date']||'date']||'').toString().trim();
-          const presentRaw = (r[lk['present']||lk['p']||'present']||'').toString().trim();
-
-          if (!className || !usn) continue;
-          // parse date to yyyy-mm-dd
-          let date = '';
-          if (dateRaw) {
-            const d = new Date(dateRaw);
-            if (!isNaN(d)) date = d.toISOString().slice(0,10);
-            else {
-              const m = dateRaw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-              if (m) { date = `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; }
-              else date = new Date().toISOString().slice(0,10);
-            }
-          } else {
-            date = new Date().toISOString().slice(0,10);
-          }
-
-          const present = (presentRaw && (presentRaw.toString().trim() === '1' || presentRaw.toString().toLowerCase().startsWith('y') || presentRaw.toString().toLowerCase().startsWith('p'))) ? true : false;
-
-          const classKey = className+'|'+section;
-          const classId = classMap[classKey];
-          if (!classId) {
-            // skip if class not found
-            continue;
-          }
-          const gk = classId+'|'+date;
-          if (!grouped[gk]) grouped[gk] = { classId: classId, date: date, marks: [] };
-          grouped[gk].marks.push({ usn, present });
-        }
-
-        // Post each grouped date batch to /attendance/mark
-        const results = [];
-        for (const k of Object.keys(grouped)) {
-          const batch = grouped[k];
-          const payload = { classId: batch.classId, date: batch.date, marks: batch.marks };
-          try {
-            const resp = await fetch('/attendance/mark', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-            const js = await resp.json();
-            results.push({ ok: resp.ok, info: js, payloadSize: batch.marks.length });
-          } catch(e) {
-            results.push({ ok:false, error: e.message });
-          }
-        }
-
-        // show summary
-        resultBox.className = 'result-box success';
-        resultTitle.textContent = '✅ Attendance uploaded (per-date rows parsed)';
-        resultContent.innerHTML = `<p>Processed ${Object.keys(grouped).length} date-batches. Details:</p><pre style="white-space:pre-wrap">${JSON.stringify(results, null, 2)}</pre>`;
-
-        return { summary:false, results };
-      }
-
-      // If unknown format
-      showError('Could not detect Excel format. Expect either CH/CF columns (summary) or Date+Present columns (per-date attendance).');
-    } catch(err) {
-      console.error(err);
-      showError('Error parsing Excel: '+err.message);
+function buildDailySummary(rows) {
+  const grouped = {};
+  rows.forEach((r) => {
+    const usn = String(getValue(r, ['usn', 'u_sn'])).trim();
+    const name = String(getValue(r, ['studentname', 'name'])).trim();
+    const present = parsePresent(getValue(r, ['present', 'p']));
+    if (!usn && !name) return;
+    const key = usn || name;
+    if (!grouped[key]) {
+      grouped[key] = { usn, name, total: 0, presents: 0 };
     }
-  };
-  reader.readAsArrayBuffer(file);
+    grouped[key].total += 1;
+    grouped[key].presents += present ? 1 : 0;
+  });
+
+  return Object.values(grouped).map((x) => {
+    const percentage = x.total ? Number(((x.presents / x.total) * 100).toFixed(2)) : 0;
+    return { usn: x.usn, name: x.name, ch: x.total, cf: x.presents, percentage };
+  });
 }
 
-// Hook the existing upload and new buttons to use client-side parsing
-// Replace uploadAttendanceExcel to use parseAndSendExcel
-uploadBtn && uploadBtn.addEventListener('click', async () => {
-  uploadBtn.disabled = true;
-  const r = await parseAndSendExcel();
-  uploadBtn.disabled = false;
-  if (r && r.summary) {
-    // nothing further
-  } else if (r && r.results) {
-    // open reports page automatically if any attendance uploaded
-    window.open('/reports_patched.html', '_blank');
+function renderGraph(rows) {
+  if (!reportGraph || !graphBars) return;
+  const bars = rows.map((x) => {
+    const pct = Math.max(0, Math.min(100, Number(x.percentage) || 0));
+    const color = pct >= 75 ? '#22c55e' : (pct >= 50 ? '#3b82f6' : '#ef4444');
+    return `
+      <div class="graph-col">
+        <div class="graph-col-bar">
+          <span style="height:${pct}%; background:${color};"></span>
+        </div>
+        <div class="graph-col-value">${pct}%</div>
+        <div class="graph-col-label">${x.name || 'Student'}<br><span>${x.usn || 'N/A'}</span></div>
+      </div>
+    `;
+  }).join('');
+  graphBars.innerHTML = `<div class="graph-vertical">${bars}</div>`;
+  reportGraph.style.display = 'block';
+}
+
+async function handleDaily(rows, opts = {}) {
+  const classes = await fetchClasses();
+  const classMap = {};
+  classes.forEach((c) => {
+    classMap[`${norm(c.class_name)}|${norm(c.section)}`] = c.id;
+  });
+
+  const grouped = {};
+  let skipped = 0;
+
+  rows.forEach((r) => {
+    const className = String(getValue(r, ['classname', 'class', 'class_name'])).trim();
+    const section = String(getValue(r, ['section'])).trim();
+    const usn = String(getValue(r, ['usn', 'u_sn'])).trim();
+    const name = String(getValue(r, ['studentname', 'name'])).trim();
+    const gender = String(getValue(r, ['gender'])).trim() || 'Other';
+    const date = parseDate(getValue(r, ['date']));
+    const present = parsePresent(getValue(r, ['present', 'p']));
+
+    if (!className || !section || !usn || !name) {
+      skipped += 1;
+      return;
+    }
+
+    const classId = classMap[`${norm(className)}|${norm(section)}`];
+    if (!classId) {
+      skipped += 1;
+      return;
+    }
+
+    const key = `${classId}|${date}`;
+    if (!grouped[key]) grouped[key] = { class_id: classId, date, records: [] };
+    grouped[key].records.push({
+      name,
+      usn,
+      gender,
+      status: present ? 'present' : 'absent'
+    });
+  });
+
+  const batches = Object.values(grouped);
+  if (!batches.length) {
+    showResult('error', 'No Valid Daily Rows', 'No rows matched your classes/sections. Check ClassName and Section values.');
+    return;
   }
-});
 
-// Also ensure generateReportBtn & downloadPdfBtn call parseAndSendExcel then open reports
-const generateReportBtnEl = document.getElementById('generateReportBtn') || document.querySelector('#generateReportBtn');
-const downloadPdfBtnEl = document.getElementById('downloadPdfBtn') || document.querySelector('#downloadPdfBtn');
+  let savedRows = 0;
+  for (const batch of batches) {
+    const res = await fetch('/api/attendance/mark', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(batch)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to save attendance');
+    savedRows += batch.records.length;
+  }
 
-generateReportBtnEl && generateReportBtnEl.addEventListener('click', async () => {
-  generateReportBtnEl.disabled = true;
-  const r = await parseAndSendExcel();
-  generateReportBtnEl.disabled = false;
-  if (r && !r.summary) window.open('/reports_patched.html', '_blank');
-});
+  if (opts.silentReport) {
+    showUploadSuccess();
+    return;
+  }
 
-downloadPdfBtnEl && downloadPdfBtnEl.addEventListener('click', async () => {
-  downloadPdfBtnEl.disabled = true;
-  const r = await parseAndSendExcel();
-  downloadPdfBtnEl.disabled = false;
-  if (r && !r.summary) window.open('/reports_patched.html', '_blank');
-});
+  showResult(
+    'success',
+    'Daily Attendance Uploaded',
+    `<p>Saved rows: <strong>${savedRows}</strong></p>
+     <p>Skipped rows: <strong>${skipped}</strong></p>
+     <p>Batches saved: <strong>${batches.length}</strong></p>`
+  );
+}
+
+async function handlePdfUpload(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch('/api/upload/report-pdf', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to parse PDF');
+
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  if (!rows.length) {
+    showResult('error', 'No Rows Found', 'Could not find report rows in this PDF. Please re-download PDF from Reports and upload again.');
+    return;
+  }
+
+  const table = `
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Name</th><th>USN</th><th>Total present classes</th><th>Total classes</th><th>Percentage</th></tr>
+        </thead>
+        <tbody>
+          ${rows.map((x) => `<tr><td>${x.name}</td><td>${x.usn}</td><td>${x.presents}</td><td>${x.total}</td><td>${x.percentage}%</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  latestReportRows = rows.map((x) => ({
+    name: x.name,
+    usn: x.usn,
+    ch: x.total,
+    cf: x.presents,
+    percentage: x.percentage
+  }));
+  latestReportTitle = 'PDF Report Preview';
+
+  showResult(
+    'success',
+    'PDF Report Parsed',
+    `${table}<p style="margin-top:10px;">Parsed from downloaded report PDF.</p>`
+  );
+  renderGraph(latestReportRows);
+}
 
 
+generateBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
 
-// Helper: post the selected file to server endpoint (daily or summary)
-async function postFileToServer(endpoint) {
-  if (!fileInput.files.length) return showError('Please select a file first');
-  const fd = new FormData();
-  fd.append('file', fileInput.files[0]);
+  generateBtn.disabled = true;
+  const oldText = generateBtn.textContent;
+  generateBtn.textContent = 'Generating...';
+
   try {
-    const resp = await fetch(endpoint, { method: 'POST', body: fd });
-    const data = await resp.json();
-    if (!resp.ok) { showError(data.error || 'Server error'); return null; }
-    return data;
+    if (isPdf(selectedFile)) {
+      await handlePdfUpload(selectedFile);
+      return;
+    }
+
+    const buf = await selectedFile.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    if (!rows.length) {
+      showResult('error', 'Empty File', 'No data rows found in first sheet.');
+      return;
+    }
+
+    if (uploadType.value === 'summary') {
+      await handleSummary(rows);
+    } else {
+      const summary = buildDailySummary(rows);
+      if (!summary.length) {
+        showResult('error', 'No Valid Rows', 'Daily file did not include valid rows.');
+        return;
+      }
+
+      latestReportRows = summary;
+      latestReportTitle = 'Daily Attendance Summary';
+
+      const table = `
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>Name</th><th>USN</th><th>Total classes</th><th>Total present classes</th><th>Percentage</th></tr>
+            </thead>
+            <tbody>
+              ${summary.map((x) => `<tr><td>${x.name}</td><td>${x.usn}</td><td>${x.ch}</td><td>${x.cf}</td><td>${x.percentage}%</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
+      showResult('success', 'Daily Summary Generated', table);
+      renderGraph(summary);
+    }
   } catch (err) {
-    showError('Upload error: ' + err.message);
-    return null;
+    console.error(err);
+    showResult('error', 'Generate Failed', err.message || 'Unable to generate report preview.');
+  } finally {
+    generateBtn.disabled = false;
+    generateBtn.textContent = oldText;
   }
-}
+});
 
-
-// Enhanced upload behavior: choose server-side route based on dropdown selection (Option A uses DB storage for summary)
-const uploadTypeSelect = document.getElementById('uploadType');
-
-uploadBtn && uploadBtn.addEventListener('click', async () => {
-  uploadBtn.disabled = true;
-  const mode = uploadTypeSelect ? uploadTypeSelect.value : 'daily';
-  if (mode === 'daily') {
-    // Prefer server-side route for daily in this mode
-    const res = await postFileToServer('/upload-excel/daily');
-    if (res) {
-      resultBox.className = 'result-box success';
-      resultTitle.textContent = '✅ Daily upload (server)';
-      resultContent.innerHTML = `<p>Added: ${res.added} | Skipped: ${res.skipped}</p>`;
-      // open reports
-      window.open('/reports_patched.html', '_blank');
-    }
-  } else if (mode === 'summary') {
-    const res = await postFileToServer('/upload-excel/summary');
-    if (res) {
-      resultBox.className = 'result-box success';
-      resultTitle.textContent = '✅ Summary upload (server)';
-      resultContent.innerHTML = `<p>Added: ${res.added} | Updated: ${res.updated} | Skipped: ${res.skipped}</p>`;
-      // open reports
-      window.open('/reports_patched.html', '_blank');
-    }
+downloadBtn.addEventListener('click', () => {
+  if (!latestReportRows.length) {
+    showResult('error', 'No Report Data', 'Generate a report first to download the PDF.');
+    return;
   }
-  uploadBtn.disabled = false;
+
+  const rowsHtml = latestReportRows.map((x) => `
+    <tr>
+      <td>${x.name || ''}</td>
+      <td>${x.usn || ''}</td>
+      <td>${x.ch ?? x.total ?? ''}</td>
+      <td>${x.cf ?? x.presents ?? ''}</td>
+      <td>${x.percentage ?? ''}%</td>
+    </tr>
+  `).join('');
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) {
+    showResult('error', 'Popup Blocked', 'Allow popups to download the PDF.');
+    return;
+  }
+
+  const html = `
+    <html>
+      <head>
+        <title>${latestReportTitle}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+          h2 { margin-bottom: 6px; }
+          p { margin-top: 0; color: #475569; }
+          table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+          th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+          th { background: #2563eb; color: #fff; }
+        </style>
+      </head>
+      <body>
+        <h2>${latestReportTitle}</h2>
+        <p>Generated: ${new Date().toLocaleString()}</p>
+        <table>
+          <thead>
+            <tr><th>Name</th><th>USN</th><th>Total classes</th><th>Total present classes</th><th>Percentage</th></tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <script>
+          window.onload = () => setTimeout(() => window.print(), 200);
+        </script>
+      </body>
+    </html>
+  `;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 });

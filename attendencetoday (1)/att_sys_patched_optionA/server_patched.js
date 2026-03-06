@@ -14,15 +14,113 @@ const XLSX = require('xlsx');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const sqlite3 = require('sqlite3').verbose();
 const { open } = require('sqlite');
 const cors = require('cors');
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cors());
-// serve frontend assets from local public directory
-app.use(express.static(path.join(__dirname, 'public')));
+
+let bcrypt = null;
+try {
+  // Reuse bcrypt from the bundled att_sys package if available.
+  bcrypt = require(path.join(__dirname, 'att_sys', 'node_modules', 'bcryptjs'));
+} catch (_) {
+  bcrypt = null;
+}
+
+const SESSION_COOKIE = 'ams_session';
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
+const sessions = new Map();
+const protectedPages = new Set([
+  '/dashboard.html',
+  '/class_management.html',
+  '/attendance.html',
+  '/reports.html',
+  '/excel.html'
+]);
+
+function sha256(text) {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || '';
+  const out = {};
+  header.split(';').forEach((part) => {
+    const [k, ...v] = part.trim().split('=');
+    if (!k) return;
+    out[k] = decodeURIComponent(v.join('=') || '');
+  });
+  return out;
+}
+
+function getSession(req) {
+  const cookies = parseCookies(req);
+  const token = cookies[SESSION_COOKIE];
+  if (!token) return null;
+  const session = sessions.get(token);
+  if (!session) return null;
+  if (Date.now() > session.expiresAt) {
+    sessions.delete(token);
+    return null;
+  }
+  return { token, ...session };
+}
+
+function setSessionCookie(res, token) {
+  const maxAgeSec = Math.floor(SESSION_TTL_MS / 1000);
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${maxAgeSec}; SameSite=Lax`
+  );
+}
+
+function clearSessionCookie(res) {
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`
+  );
+}
+
+function requireAuthApi(req, res, next) {
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ error: 'Unauthorized' });
+  req.user = session.user;
+  next();
+}
+
+function requireAuthPage(req, res, next) {
+  const session = getSession(req);
+  if (!session) return res.redirect('/login');
+  req.user = session.user;
+  next();
+}
+
+async function hashPassword(password) {
+  if (bcrypt) return bcrypt.hash(password, 10);
+  return sha256(password);
+}
+
+async function verifyPassword(password, storedHash) {
+  if (!storedHash) return false;
+  if (storedHash.startsWith('$2') && bcrypt) {
+    return bcrypt.compare(password, storedHash);
+  }
+  // Fallback for legacy/plain or sha256 entries
+  return storedHash === password || storedHash === sha256(password);
+}
+
+function normalizedPath(pathname) {
+  const lower = (pathname || '').toLowerCase();
+  if (lower.startsWith('/public/')) {
+    return lower.slice('/public'.length);
+  }
+  return lower;
+}
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -33,6 +131,16 @@ let httpServer;
     // Use existing database if available, otherwise create new one
     const dbPath = fs.existsSync('./att_sys/attendance.db') ? './att_sys/attendance.db' : './attendance.db';
     db = await open({ filename: dbPath, driver: sqlite3.Database });
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS teachers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_teachers_username ON teachers(username)');
     // Use existing schema - tables already exist with different structure
     // Existing: classes (id, teacher_id, class_name, section, subject_code, subject_name, hours)
     // Existing: students (id, class_id, name, usn, gender)
@@ -54,10 +162,123 @@ async function countStudents(classId) {
   return row ? row.cnt : 0;
 }
 
-app.post('/upload-excel', upload.single('file'), async (req, res) => {
+app.post('/api/register', async (req, res) => {
+  try {
+    const name = (req.body.name || '').toString().trim();
+    const username = (req.body.username || '').toString().trim().toLowerCase();
+    const password = (req.body.password || '').toString();
+
+    if (!name || !username || !password) {
+      return res.status(400).json({ error: 'name, username and password are required' });
+    }
+    if (password.length < 4) {
+      return res.status(400).json({ error: 'Password must be at least 4 characters' });
+    }
+
+    const existing = await db.get('SELECT id FROM teachers WHERE username = ?', [username]);
+    if (existing) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+
+    const passwordHash = await hashPassword(password);
+    try {
+      await db.run(
+        'INSERT INTO teachers (name, username, password_hash) VALUES (?, ?, ?)',
+        [name, username, passwordHash]
+      );
+    } catch (insertErr) {
+      if (String(insertErr.message || '').toLowerCase().includes('unique')) {
+        return res.status(409).json({ error: 'Username already exists' });
+      }
+      throw insertErr;
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('ERROR in /api/register:', err);
+    return res.status(500).json({ error: 'Failed to register' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const username = (req.body.username || '').toString().trim().toLowerCase();
+    const password = (req.body.password || '').toString();
+    if (!username || !password) {
+      return res.status(400).json({ error: 'username and password are required' });
+    }
+
+    const user = await db.get(
+      'SELECT id, name, username, password_hash FROM teachers WHERE username = ?',
+      [username]
+    );
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const ok = await verifyPassword(password, user.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    sessions.set(token, {
+      user: { id: user.id, name: user.name, username: user.username },
+      expiresAt: Date.now() + SESSION_TTL_MS
+    });
+    setSessionCookie(res, token);
+    return res.json({ success: true, user: { id: user.id, name: user.name, username: user.username } });
+  } catch (err) {
+    console.error('ERROR in /api/login:', err);
+    return res.status(500).json({ error: 'Failed to login' });
+  }
+});
+
+app.post('/api/logout', (req, res) => {
+  const session = getSession(req);
+  if (session) {
+    sessions.delete(session.token);
+  }
+  clearSessionCookie(res);
+  res.json({ success: true });
+});
+
+app.get('/api/me', requireAuthApi, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// Guard protected pages before static file serving.
+app.use((req, res, next) => {
+  const target = normalizedPath(req.path);
+  if (protectedPages.has(target)) {
+    return requireAuthPage(req, res, next);
+  }
+  return next();
+});
+
+// Visiting home clears active session so user must login again.
+app.use((req, res, next) => {
+  const target = normalizedPath(req.path);
+  if (target === '/' || target === '/index.html') {
+    const session = getSession(req);
+    if (session) {
+      sessions.delete(session.token);
+      clearSessionCookie(res);
+    }
+  }
+  return next();
+});
+
+// serve frontend assets from project root
+app.use(express.static(__dirname));
+// backward compatibility for old /public/... URLs
+app.use('/public', express.static(__dirname));
+
+app.post('/upload-excel', requireAuthApi, upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
+    const teacherId = req.user.id;
     const workbook = XLSX.readFile(file.path);
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
@@ -79,14 +300,16 @@ app.post('/upload-excel', upload.single('file'), async (req, res) => {
       }
 
       // Use existing schema: class_name, subject_name instead of name, subject
-      // Also need teacher_id - use 1 as default or get from first teacher
-      let cls = await db.get('SELECT * FROM classes WHERE class_name = ? AND section = ? AND subject_name = ?', [className, section, subject]);
+      // and scope class operations to the logged-in teacher.
+      let cls = await db.get(
+        'SELECT * FROM classes WHERE teacher_id = ? AND class_name = ? AND section = ? AND subject_name = ?',
+        [teacherId, className, section, subject]
+      );
       if (!cls) {
-        // Get first teacher or use teacher_id = 1
-        const teacher = await db.get('SELECT id FROM teachers LIMIT 1');
-        const teacherId = teacher ? teacher.id : 1;
-        const result = await db.run('INSERT INTO classes (teacher_id, class_name, section, subject_code, subject_name, hours) VALUES (?, ?, ?, ?, ?, ?)', 
-          [teacherId, className, section, subject || 'N/A', subject, 0]);
+        const result = await db.run(
+          'INSERT INTO classes (teacher_id, class_name, section, subject_code, subject_name, hours) VALUES (?, ?, ?, ?, ?, ?)',
+          [teacherId, className, section, subject || 'N/A', subject, 0]
+        );
         cls = { id: result.lastID, class_name: className, section, subject_name: subject };
       }
 
@@ -99,7 +322,7 @@ app.post('/upload-excel', upload.single('file'), async (req, res) => {
       try {
         // Existing schema requires gender field - default to 'Not Specified'
         await db.run('INSERT OR IGNORE INTO students (usn, name, class_id, gender) VALUES (?, ?, ?, ?)', [usn, studentName, cls.id, 'Not Specified']);
-        await db.run('UPDATE students SET name = ?, class_id = ? WHERE usn = ?', [studentName, cls.id, usn]);
+        await db.run('UPDATE students SET name = ? WHERE usn = ? AND class_id = ?', [studentName, usn, cls.id]);
         added.push({ usn, name: studentName, classId: cls.id });
       } catch (err) {
         rejected.push({ usn, name: studentName, reason: err.message });
@@ -117,15 +340,20 @@ app.post('/upload-excel', upload.single('file'), async (req, res) => {
 // Test endpoint to check database
 // serve login page at root
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  const session = getSession(req);
+  if (session) {
+    sessions.delete(session.token);
+    clearSessionCookie(res);
+  }
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // additional simple routes for demo purposes
 app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'register.html'));
+  res.sendFile(path.join(__dirname, 'register.html'));
 });
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+  res.sendFile(path.join(__dirname, 'login.html'));
 });
 
 app.get('/test-db', async (req, res) => {
@@ -137,16 +365,16 @@ app.get('/test-db', async (req, res) => {
   }
 });
 
-app.get('/classes', async (req, res) => {
+app.get('/classes', requireAuthApi, async (req, res) => {
   try {
     console.log('GET /classes endpoint hit');
     // First get all columns to see what we have
     const testQuery = await db.all('PRAGMA table_info(classes)');
     console.log('Classes table structure:', testQuery);
     
-    const query = 'SELECT id, class_name, section, subject_code, subject_name, hours FROM classes';
+    const query = 'SELECT id, class_name, section, subject_code, subject_name, hours FROM classes WHERE teacher_id = ?';
     console.log('Executing:', query);
-    const classes = await db.all(query);
+    const classes = await db.all(query, [req.user.id]);
     console.log('Found classes:', classes.length);
     
     // Map to expected format; include raw pieces and a combined display value
@@ -174,7 +402,7 @@ app.get('/classes', async (req, res) => {
 });
 
 // Create a class from the "Upload Class Details" UI
-app.post('/classes', async (req, res) => {
+app.post('/classes', requireAuthApi, async (req, res) => {
   try {
     const className = (req.body.className || req.body.class_name || '').toString().trim();
     const section = (req.body.section || '').toString().trim();
@@ -187,8 +415,7 @@ app.post('/classes', async (req, res) => {
       return res.status(400).json({ error: 'className, section, subjectCode, subjectName are required' });
     }
 
-    const teacher = await db.get('SELECT id FROM teachers LIMIT 1');
-    const teacherId = teacher ? teacher.id : 1;
+    const teacherId = req.user.id;
 
     // Avoid duplicates: if same class already exists for this teacher, return it
     const existing = await db.get(
@@ -239,10 +466,15 @@ app.post('/classes', async (req, res) => {
 });
 
 // return students for a given class id
-app.get('/classes/:id/students', async (req, res) => {
+app.get('/classes/:id/students', requireAuthApi, async (req, res) => {
   try {
     const classId = parseInt(req.params.id);
     if (!classId) return res.status(400).json({ error: 'classId required' });
+    const classRow = await db.get(
+      'SELECT id FROM classes WHERE id = ? AND teacher_id = ?',
+      [classId, req.user.id]
+    );
+    if (!classRow) return res.status(404).json({ error: 'Class not found' });
     const students = await db.all('SELECT name, usn, gender FROM students WHERE class_id = ?', [classId]);
     res.json({ students });
   } catch (err) {
@@ -251,7 +483,7 @@ app.get('/classes/:id/students', async (req, res) => {
   }
 });
 
-app.get('/reports', async (req, res) => {
+app.get('/reports', requireAuthApi, async (req, res) => {
   try {
     const classId = parseInt(req.query.classId);
     const period = parseInt(req.query.period) || 7;
@@ -260,6 +492,8 @@ app.get('/reports', async (req, res) => {
     const maxPct = parseFloat(range[1]) || 100;
 
     if (!classId) return res.status(400).json({ error: 'classId required' });
+    const classRow = await db.get('SELECT id FROM classes WHERE id = ? AND teacher_id = ?', [classId, req.user.id]);
+    if (!classRow) return res.status(404).json({ error: 'Class not found' });
 
     const sinceDate = new Date();
     sinceDate.setDate(sinceDate.getDate() - period);
@@ -296,7 +530,7 @@ app.get('/reports', async (req, res) => {
   }
 });
 
-app.get('/reports/download', async (req, res) => {
+app.get('/reports/download', requireAuthApi, async (req, res) => {
   try {
     const classId = parseInt(req.query.classId);
     const period = parseInt(req.query.period) || 7;
@@ -305,6 +539,8 @@ app.get('/reports/download', async (req, res) => {
     const maxPct = parseFloat(range[1]) || 100;
 
     if (!classId) return res.status(400).json({ error: 'classId required' });
+    const classRow = await db.get('SELECT id FROM classes WHERE id = ? AND teacher_id = ?', [classId, req.user.id]);
+    if (!classRow) return res.status(404).json({ error: 'Class not found' });
 
     const sinceDate = new Date();
     sinceDate.setDate(sinceDate.getDate() - period);
@@ -418,10 +654,13 @@ app.get('/reports/download', async (req, res) => {
   }
 });
 
-app.post('/attendance/mark', async (req, res) => {
+app.post('/attendance/mark', requireAuthApi, async (req, res) => {
   const { classId, date, marks } = req.body;
   if (!classId || !date || !Array.isArray(marks)) return res.status(400).json({ error: 'Invalid payload' });
   try {
+    const classRow = await db.get('SELECT id FROM classes WHERE id = ? AND teacher_id = ?', [classId, req.user.id]);
+    if (!classRow) return res.status(404).json({ error: 'Class not found' });
+
     for (const m of marks) {
       let student = await db.get('SELECT id FROM students WHERE usn = ? AND class_id = ?', [m.usn, classId]);
       // If student does not exist yet (e.g. added from Record Attendance UI), create it on the fly
@@ -455,11 +694,15 @@ app.post('/attendance/mark', async (req, res) => {
 });
 
 // download attendance for a specific class/date as PDF
-app.get('/attendance/download', async (req, res) => {
+app.get('/attendance/download', requireAuthApi, async (req, res) => {
   try {
     const classId = parseInt(req.query.classId);
     const date = req.query.date;
+    const time = req.query.time;
+    const hours = req.query.hours;
     if (!classId || !date) return res.status(400).json({ error: 'classId and date required' });
+    const classRow = await db.get('SELECT id FROM classes WHERE id = ? AND teacher_id = ?', [classId, req.user.id]);
+    if (!classRow) return res.status(404).json({ error: 'Class not found' });
     const students = await db.all('SELECT s.usn, s.name, a.status FROM students s LEFT JOIN attendance a ON a.student_id = s.id AND a.date = ? WHERE s.class_id = ?', [date, classId]);
     const doc = new PDFDocument({ margin: 30, size: 'A4' });
     res.setHeader('Content-disposition', `attachment; filename=attendance_${classId}_${date}.pdf`);
@@ -467,7 +710,10 @@ app.get('/attendance/download', async (req, res) => {
     doc.pipe(res);
     doc.fontSize(16).text('Attendance Sheet', { align: 'center' });
     doc.moveDown();
-    doc.fontSize(12).text(`Class ID: ${classId}   Date: ${date}`);
+    let headerLine = `Class ID: ${classId}   Date: ${date}`;
+    if (time) headerLine += `   Time: ${time}`;
+    if (hours) headerLine += `   Hours: ${hours}`;
+    doc.fontSize(12).text(headerLine);
     doc.moveDown();
     doc.font('Helvetica-Bold');
     doc.text('USN', 50, doc.y, { continued: true });
@@ -494,10 +740,11 @@ app.get('/attendance/download', async (req, res) => {
 // ---------------------------
 // Upload Attendance Excel
 // ---------------------------
-app.post('/upload-attendance-excel', upload.single('file'), async (req, res) => {
+app.post('/upload-attendance-excel', requireAuthApi, upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
+    const teacherId = req.user.id;
     const workbook = XLSX.readFile(file.path);
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
@@ -535,7 +782,10 @@ app.post('/upload-attendance-excel', upload.single('file'), async (req, res) => 
       const present = (presentRaw && (presentRaw.toString().trim() === '1' || presentRaw.toString().toLowerCase().startsWith('y') || presentRaw.toString().toLowerCase().startsWith('p'))) ? 1 : 0;
 
       // find class id
-      const cls = await db.get('SELECT id FROM classes WHERE class_name = ? AND section = ?', [className, section]);
+      const cls = await db.get(
+        'SELECT id FROM classes WHERE teacher_id = ? AND class_name = ? AND section = ?',
+        [teacherId, className, section]
+      );
       if (!cls) { skipped++; continue; }
       const student = await db.get('SELECT id FROM students WHERE usn = ? AND class_id = ?', [usn, cls.id]);
       if (!student) { skipped++; continue; }

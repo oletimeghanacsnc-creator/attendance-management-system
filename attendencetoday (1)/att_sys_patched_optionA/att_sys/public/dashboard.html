@@ -2,157 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Teacher Dashboard — Attendance System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teacher Dashboard | Attendance Management System</title>
   <link rel="stylesheet" href="/style.css">
   <script defer src="/dashboard.js"></script>
-
-  <style>
-    body {
-      background: linear-gradient(135deg, #0f172a, #1e293b);
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-    }
-    .header h1 {
-      color: #38bdf8;
-      font-size: 2rem;
-      font-weight: 700;
-      margin: 0;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-    }
-    .card {
-      background-color: #ffffff;
-      color: #0f172a;
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 25px rgba(0, 0, 0, 0.25);
-    }
-    .card h3 {
-      color: #1d4ed8;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .muted {
-      color: #334155;
-      font-size: 0.95rem;
-      line-height: 1.5;
-    }
-    .card img {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-    }
-    .feature-title {
-      text-align: center;
-      font-size: 1.8rem;
-      color: #3b82f6;
-      margin-bottom: 20px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-    }
-    .btn {
-      margin-top: 12px;
-    }
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .nav-links .link {
-      font-size: 1.2rem;
-      color: #93c5fd;
-    }
-    .nav-links .link:hover {
-      text-decoration: underline;
-    }
-  </style>
 </head>
-<body>
-  <div class="container">
-    
-    <!-- Header -->
-    <div class="header">
-      <h1>👩‍🏫 Teacher Dashboard</h1>
+<body class="theme-dark">
+  <main class="container dashboard-shell">
+    <header class="dashboard-header">
+      <div>
+        <h1 class="page-title">
+          <span class="title-icon">👩‍🏫</span>
+          Teacher Dashboard
+        </h1>
+        <p id="greet" class="page-subtitle">Loading your profile...</p>
+      </div>
       <div class="nav-links">
-        <a href="/index.html" class="link">🏠 Home</a>
-        <button class="btn danger" onclick="logout()">Logout</button>
+        <a href="index.html" class="link">Home</a>
+        <button class="btn success" onclick="logout()">Logout</button>
       </div>
-    </div>
+    </header>
 
-    <!-- Greeting -->
-    <p id="greet" class="muted" style="font-size: 1.1rem; margin-bottom: 30px;">Welcome back, Teacher!</p>
+    <h2 class="section-title">Manage Your Classes and Attendance</h2>
 
-    <!-- Features -->
-    <h2 class="feature-title">✨ Manage Your Classes and Attendance</h2>
+    <section class="dashboard-grid">
+      <article class="dash-card">
+        <span class="dash-icon">🏫</span>
+        <h3>Class Management</h3>
+        <p>Add and manage class details for subjects, sections, and hours.</p>
+        <a href="class.html" class="btn">Upload Class Details</a>
+      </article>
 
-    <!-- Cards Grid -->
-    <div class="grid">
-      
-      <!-- Class Management -->
-      <div class="card">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <img src="https://img.freepik.com/premium-vector/vector-design-classroom-management-icon-style_822882-67749.jpg"
-               alt="Class Management Icon">
-          <h3>Class Management</h3>
-        </div>
-        <p class="muted">Add and manage class details for your subjects, sections, and hours.</p>
-        <a href="/class.html">
-          <button class="btn secondary">Upload Class Details</button>
-        </a>
-      </div>
+      <article class="dash-card">
+        <span class="dash-icon">📝</span>
+        <h3>Record Attendance</h3>
+        <p>Quickly mark absentees while everyone else is present.</p>
+        <a href="attendance.html" class="btn">Record Attendance</a>
+      </article>
 
-      <!-- Record Attendance -->
-      <div class="card">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <img src="https://media.istockphoto.com/id/1059233806/vector/man-hold-attendance-clipboard-with-checklist-questionnaire-survey-clipboard-task-list-flat.jpg?s=612x612&w=0&k=20&c=Yv3g79R_g5mMliBx4McY2Xt0k552tVZ0xHbIBO2cMx8=" 
-               alt="Attendance Icon">
-          <h3>Record Attendance</h3>
-        </div>
-        <p class="muted">Easily mark absentees — all others are set present by default.</p>
-        <a href="/attendance.html">
-          <button class="btn secondary">Record Attendance</button>
-        </a>
-      </div>
+      <article class="dash-card">
+        <span class="dash-icon">📊</span>
+        <h3>Reports</h3>
+        <p>View weekly and monthly attendance summaries for your classes.</p>
+        <a href="reports.html" class="btn">View Reports</a>
+      </article>
 
-      <!-- Reports -->
-      <div class="card">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <img src="https://static.vecteezy.com/system/resources/previews/019/138/376/non_2x/report-icon-for-your-website-design-logo-app-ui-free-vector.jpg" 
-               alt="Reports Icon">
-          <h3>Reports</h3>
-        </div>
-        <p class="muted">View weekly and monthly attendance summaries for your classes.</p>
-        <a href="/reports.html">
-          <button class="btn secondary">View Reports</button>
-        </a>
-      </div>
-
-      <!-- Excel Upload -->
-      <div class="card">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <img src="https://cdn-icons-png.flaticon.com/512/888/888857.png" 
-               alt="Excel Upload Icon" style="width: 40px; height: 40px;">
-          <h3>Excel Upload</h3>
-        </div>
-        <p class="muted">Upload Excel (.xlsx) file to import classes and students in bulk. Max 60 students per class.</p>
-        <a href="/excel-upload.html">
-          <button class="btn secondary">📤 Upload Excel</button>
-        </a>
-      </div>
-
-    </div>
-  </div>
+      <article class="dash-card">
+        <span class="dash-icon">📥</span>
+        <h3>Excel Upload</h3>
+        <p>Upload Excel (.xlsx) files to import classes and attendance.</p>
+        <a href="excel-upload.html" class="btn">Upload Excel</a>
+      </article>
+    </section>
+  </main>
 </body>
 </html>
