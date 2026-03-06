@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attendance Reports | Attendance Management System</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">
+          <span class="title-icon">📈</span>
+          Attendance Reports
+        </h1>
+        <p class="page-subtitle">Filter by class, period, and attendance range.</p>
+      </div>
+      <a href="/dashboard.html" class="back-link">Back to Dashboard</a>
+    </div>
+    <hr class="header-line">
+
+    <section class="card">
+      <div class="filter-row">
+        <div>
+          <label for="classSelect">Class</label>
+          <select id="classSelect">
+            <option value="">Loading classes...</option>
+          </select>
+        </div>
+        <div>
+          <label for="sectionSelect">Section</label>
+          <select id="sectionSelect">
+            <option value="">All Sections</option>
+          </select>
+        </div>
+        <div>
+          <label for="period">Period</label>
+          <select id="period">
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+        </div>
+        <div>
+          <label for="range">Attendance Range</label>
+          <select id="range">
+            <option value="0-100">All (0-100%)</option>
+            <option value="0-40">Low (0-40%)</option>
+            <option value="40-60">Medium (40-60%)</option>
+            <option value="60-80">Good (60-80%)</option>
+            <option value="80-100">Excellent (80-100%)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="attendance-actions">
+        <button id="load" class="btn" type="button">Load Report</button>
+        <button id="download" class="btn success" type="button">PDF</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table table-blue">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>USN</th>
+              <th>Total present classes</th>
+              <th>Total classes</th>
+              <th>Percentage (%)</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <p id="msg" class="muted">Select filters and click Load Report.</p>
+
+    </section>
+  </main>
+
+  <script src="/reports.js"></script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Excel Upload | Attendance Management System</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="theme-dark">
+  <main class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">
+          <span class="title-icon">📤</span>
+          Excel Upload
+        </h1>
+        <p class="page-subtitle">Upload daily attendance or summary Excel data.</p>
+      </div>
+      <a href="/dashboard.html" class="back-link">Back to Dashboard</a>
+    </div>
+    <hr class="header-line">
+
+    <section class="card">
+      <h3 class="panel-title">Upload Excel File</h3>
+
+      <div class="upload-area" id="uploadArea">
+        <div class="upload-icon">FILE</div>
+        <p><strong>Click or drag a file here</strong></p>
+        <p class="muted" style="margin-top: 4px;">Supported formats: .xlsx, .pdf</p>
+        <input type="file" id="fileInput" accept=".xlsx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display: none;">
+      </div>
+
+      <div class="upload-actions">
+        <div class="inline-field">
+          <label for="uploadType">Upload Type</label>
+          <select id="uploadType">
+            <option value="daily">Daily Attendance (ClassName, Section, USN, Date, Present)</option>
+            <option value="summary">Summary Attendance (USN, StudentName, CH, CF)</option>
+          </select>
+        </div>
+        <button id="generateBtn" class="btn secondary small" type="button" disabled>Generate Report</button>
+        <button id="downloadBtn" class="btn success small" type="button">Download Report PDF</button>
+      </div>
+
+      <div id="resultBox" class="result-box">
+        <h3 id="resultTitle"></h3>
+        <div id="resultContent"></div>
+        <div id="reportGraph" class="graph-wrap" style="display:none;">
+          <h4>Attendance Summary Bar Graph</h4>
+          <div id="graphBars"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="panel-title">Template Notes</h3>
+      <ul class="info-list">
+        <li>Daily format columns: <strong>ClassName, Section, USN, StudentName, Gender, Date, Present</strong>.</li>
+        <li>Downloaded report PDF can be uploaded for row preview parsing.</li>
+        <li>For daily upload, class + section must already exist in Class Management.</li>
+        <li>Present values accepted: 1 / yes / present / p (others are treated as absent).</li>
+        <li>Summary format columns: <strong>USN, StudentName, CH, CF</strong>.</li>
+        <li>Ensure USN values are accurate and unique per student.</li>
+        <li>Summary upload is preview-only and does not write attendance records.</li>
+      </ul>
+    </section>
+  </main>
+
+  <script src="/vendor/xlsx.full.min.js"></script>
+  <script src="/excel-upload.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register | Attendance Management System</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="auth-wrap">
+    <section class="card auth-card">
+      <h1>Create Teacher Account</h1>
+      <p class="auth-note">Register to access attendance and reporting modules.</p>
+
+      <form id="registerForm" class="form-stack">
+        <label for="name">Name</label>
+        <input id="name" class="input" type="text" name="name" placeholder="Teacher name" required>
+
+        <label for="username">Username</label>
+        <input id="username" class="input" type="text" name="username" placeholder="Username" required>
+
+        <label for="password">Password</label>
+        <input id="password" class="input" type="password" name="password" placeholder="Create password" required>
+
+        <button type="submit" class="btn">Create Account</button>
+      </form>
+
+      <div class="row" style="margin-top: 12px;">
+        <a class="link" href="/login.html">Already have an account? Login</a>
+      </div>
+
+      <p id="msg" class="muted"></p>
+    </section>
+  </main>
+
+  <script src="/register.js"></script>
+</body>
+</html>

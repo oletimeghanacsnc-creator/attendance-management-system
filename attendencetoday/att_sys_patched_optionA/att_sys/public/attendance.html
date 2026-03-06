@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Record Attendance | Attendance Management System</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">
+          <span class="title-icon">🧾</span>
+          Record Attendance
+        </h1>
+        <p class="page-subtitle">Select your class and date, then mark absentees.</p>
+      </div>
+      <a href="/dashboard.html" class="back-link">Back to Dashboard</a>
+    </div>
+    <hr class="header-line">
+
+    <section class="card">
+      <div class="filter-row">
+        <div>
+          <label for="classSelect">Select Class:</label>
+          <select id="classSelect" required>
+            <option value="">Loading classes...</option>
+          </select>
+        </div>
+        <div>
+          <label for="date">Date:</label>
+          <input class="input" type="date" id="date" required>
+        </div>
+        <div>
+          <label for="hour">Hour / Period:</label>
+          <select id="hour" required>
+            <option value="1">Hour 1</option>
+            <option value="2">Hour 2</option>
+            <option value="3">Hour 3</option>
+            <option value="4">Hour 4</option>
+            <option value="5">Hour 5</option>
+            <option value="6">Hour 6</option>
+            <option value="7">Hour 7</option>
+            <option value="8">Hour 8</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="attendance-actions">
+        <button class="btn success" id="addRow" type="button">+ Add Student</button>
+        <button class="btn" id="save" type="button">Save Attendance</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table table-blue">
+          <thead>
+            <tr>
+              <th>Student Name</th>
+              <th>USN</th>
+              <th>Gender</th>
+              <th>Status (Click to Toggle)</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <p id="msg" class="muted"></p>
+    </section>
+  </main>
+
+  <script src="/attendance.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teacher Dashboard | Attendance Management System</title>
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/dashboard.js"></script>
+</head>
+<body class="theme-dark">
+  <main class="container dashboard-shell">
+    <header class="dashboard-header">
+      <div>
+        <h1 class="page-title">
+          <span class="title-icon">👩‍🏫</span>
+          Teacher Dashboard
+        </h1>
+        <p id="greet" class="page-subtitle">Loading your profile...</p>
+      </div>
+      <div class="nav-links">
+        <a href="index.html" class="link">Home</a>
+        <button class="btn success" onclick="logout()">Logout</button>
+      </div>
+    </header>
+
+    <h2 class="section-title">Manage Your Classes and Attendance</h2>
+
+    <section class="dashboard-grid">
+      <article class="dash-card">
+        <span class="dash-icon">🏫</span>
+        <h3>Class Management</h3>
+        <p>Add and manage class details for subjects, sections, and hours.</p>
+        <a href="class.html" class="btn">Upload Class Details</a>
+      </article>
+
+      <article class="dash-card">
+        <span class="dash-icon">📝</span>
+        <h3>Record Attendance</h3>
+        <p>Quickly mark absentees while everyone else is present.</p>
+        <a href="attendance.html" class="btn">Record Attendance</a>
+      </article>
+
+      <article class="dash-card">
+        <span class="dash-icon">📊</span>
+        <h3>Reports</h3>
+        <p>View weekly and monthly attendance summaries for your classes.</p>
+        <a href="reports.html" class="btn">View Reports</a>
+      </article>
+
+      <article class="dash-card">
+        <span class="dash-icon">📥</span>
+        <h3>Excel Upload</h3>
+        <p>Upload Excel (.xlsx) files to import classes and attendance.</p>
+        <a href="excel-upload.html" class="btn">Upload Excel</a>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

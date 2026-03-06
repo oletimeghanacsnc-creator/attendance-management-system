@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login | Attendance Management System</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="auth-wrap">
+    <section class="card auth-card">
+      <h1>Login</h1>
+      <p class="auth-note">Sign in to manage classes, attendance, and reports.</p>
+
+      <form id="loginForm" class="form-stack">
+        <label for="username">Username</label>
+        <input id="username" class="input" name="username" placeholder="Enter username" required>
+
+        <label for="password">Password</label>
+        <input id="password" class="input" type="password" name="password" placeholder="Enter password" required>
+
+        <button class="btn" type="submit">Login</button>
+      </form>
+
+      <div class="row" style="margin-top: 12px;">
+        <a class="link" href="/register.html">Create account</a>
+        <a class="link" href="/forget.html">Forgot password</a>
+      </div>
+
+      <p id="msg" class="muted"></p>
+    </section>
+  </main>
+
+  <script src="/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Class Management | Attendance Management System</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">
+          <span class="title-icon">📘</span>
+          Upload Class Details
+        </h1>
+        <p class="page-subtitle">Add new classes and manage your list.</p>
+      </div>
+      <a href="/dashboard.html" class="back-link">Back to Dashboard</a>
+    </div>
+    <hr class="header-line">
+
+    <section class="card">
+      <h3 class="panel-title">Add New Class</h3>
+      <form id="classForm" class="form-grid">
+        <input class="input input-dark" name="class_name" placeholder="Class Name (e.g., CSE 2nd Year)" required>
+        <input class="input input-dark" name="section" placeholder="Section (e.g., A)" required>
+        <input class="input input-dark" name="subject_code" placeholder="Subject Code (e.g., CS201)" required>
+        <input class="input input-dark" name="subject_name" placeholder="Subject Name (e.g., Data Structures)" required>
+        <input class="input input-dark" type="number" name="hours" placeholder="No. of Hours per Week" required>
+        <button class="btn full" type="submit">Save Class</button>
+      </form>
+      <p id="msg" class="status-note"></p>
+    </section>
+
+    <section class="card">
+      <h3 class="panel-title">Your Classes</h3>
+      <div class="table-wrap">
+        <table class="table table-blue" id="classesTable">
+          <thead>
+            <tr>
+              <th>Class</th>
+              <th>Section</th>
+              <th>Code</th>
+              <th>Subject</th>
+              <th>Hours</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/class.js"></script>
+</body>
+</html>
