@@ -2,9 +2,9 @@ const token = localStorage.getItem('token');
 if (!token) location.href = '/login.html';
 
 const classSelect = document.getElementById('classSelect');
-const sectionSelect = document.getElementById('sectionSelect');
 const periodSelect = document.getElementById('period');
 const rangeSelect = document.getElementById('range');
+const reportHead = document.getElementById('reportHead');
 const tbody = document.getElementById('tbody');
 const msg = document.getElementById('msg');
 const loadBtn = document.getElementById('load');
@@ -20,15 +20,19 @@ function parseRange(value) {
   };
 }
 
-function rowHtml(r) {
+function setTableHead(html) {
+  if (reportHead) reportHead.innerHTML = html;
+}
+
+function rowHtmlSummary(r) {
   const color = r.percentage >= 75 ? '#16a34a' : '#dc2626';
   return `
     <tr class="fade-in">
       <td>${r.name}</td>
-      <td>${r.usn}</td>
-      <td>${r.presents}</td>
-      <td>${r.total}</td>
-      <td style="font-weight:600;color:${color};">${r.percentage}%</td>
+      <td class="center">${r.total}</td>
+      <td class="center">${r.present}</td>
+      <td class="center">${r.absent}</td>
+      <td style="font-weight:600;color:${color};" class="center">${r.percentage}%</td>
     </tr>
   `;
 }
@@ -41,23 +45,6 @@ function renderClassOptions(list) {
   classSelect.innerHTML = list.map(c =>
     `<option value="${c.id}">${c.class_name} - ${c.section} (${c.subject_code})</option>`
   ).join('');
-}
-
-function renderSectionOptions(list) {
-  if (!sectionSelect) return;
-  const sections = [...new Set(list.map(c => c.section).filter(Boolean))].sort();
-  sectionSelect.innerHTML =
-    '<option value="">All Sections</option>' +
-    sections.map(s => `<option value="${s}">${s}</option>`).join('');
-}
-
-function applySectionFilter() {
-  const section = sectionSelect ? sectionSelect.value : '';
-  const filtered = section ? allClasses.filter(c => String(c.section) === String(section)) : allClasses;
-  renderClassOptions(filtered);
-  if (filtered.length) {
-    classSelect.value = String(filtered[0].id);
-  }
 }
 
 async function loadClasses() {
@@ -77,7 +64,6 @@ async function loadClasses() {
     }
 
     allClasses = data;
-    renderSectionOptions(data);
     renderClassOptions(data);
 
     msg.textContent = 'Select class, period, and range then click Load Report.';
@@ -99,7 +85,6 @@ async function loadReport() {
     msg.textContent = 'Please select a class to view report.';
     return;
   }
-
   try {
     msg.style.color = '#0e67d2';
     msg.textContent = 'Generating report...';
@@ -112,7 +97,11 @@ async function loadReport() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Error loading report');
 
-    const filtered = data.filter(r => r.percentage >= min && r.percentage <= max);
+    if (!data || !Array.isArray(data.rows)) {
+      throw new Error(data?.message || 'No report data available.');
+    }
+
+    const filtered = data.rows.filter(r => r.percentage >= min && r.percentage <= max);
     latestRows = filtered;
     if (!filtered.length) {
       msg.style.color = '#5c6f89';
@@ -120,9 +109,19 @@ async function loadReport() {
       return;
     }
 
-    tbody.innerHTML = filtered.map(rowHtml).join('');
+    setTableHead(`
+      <tr>
+        <th>Student</th>
+        <th class="center">Total Hours</th>
+        <th class="center">Present</th>
+        <th class="center">Absent</th>
+        <th class="center">Attendance %</th>
+      </tr>
+    `);
+    tbody.innerHTML = filtered.map(rowHtmlSummary).join('');
     msg.style.color = '#17874f';
-    msg.textContent = `Report loaded: ${filtered.length} student(s) in ${min}% - ${max}% range.`;
+    msg.textContent =
+      `Final Report for ${data.days} Day(s) (${data.total_hours} Hours Total).`;
   } catch (err) {
     console.error(err);
     msg.style.color = '#dc2626';
@@ -177,11 +176,6 @@ async function downloadReportPdf() {
 
 loadBtn.addEventListener('click', loadReport);
 downloadBtn.addEventListener('click', downloadReportPdf);
-if (sectionSelect) {
-  sectionSelect.addEventListener('change', () => {
-    applySectionFilter();
-  });
-}
 loadClasses();
 
 const style = document.createElement('style');

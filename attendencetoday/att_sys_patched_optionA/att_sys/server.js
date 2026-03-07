@@ -248,6 +248,9 @@ app.get('/api/reports', auth, (req, res) => {
   const days = Number.isFinite(parsedPeriod) && parsedPeriod > 0
     ? parsedPeriod
     : (range === 'monthly' ? 30 : 7);
+  if (!Number.isFinite(days) || days < 1) {
+    return res.status(400).json({ message: 'period must be at least 1 day' });
+  }
 
   let minPct = 0;
   let maxPct = 100;
@@ -259,33 +262,57 @@ app.get('/api/reports', auth, (req, res) => {
     }
   }
 
-  const sql = `
-    SELECT s.id as student_id, s.name, s.usn,
-      SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) AS present_hours,
-      COUNT(a.id) AS total_hours
-    FROM students s
-    LEFT JOIN attendance a ON a.student_id = s.id
-      AND a.date >= date('now', ?)
-    WHERE s.class_id = ?
-    GROUP BY s.id, s.name, s.usn
-    ORDER BY s.usn ASC`;
+  const now = new Date();
+  const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const offset = `-${Math.max(days - 1, 0)} day`;
 
-  db.all(sql, [`-${days} day`, class_id], (err, rows) => {
-    if (err) return res.status(500).json({ message: 'DB error' });
-    const out = rows.map(r => {
-      const presents = Number((r.present_hours || 0).toFixed(2));
-      const total = Number((r.total_hours || 0).toFixed(2));
-      const percentage = total ? Number(((presents / total) * 100).toFixed(2)) : 0;
-      return {
-        student_id: r.student_id,
-        name: r.name,
-        usn: r.usn,
-        presents,
-        total,
-        percentage
-      };
-    }).filter(r => r.percentage >= minPct && r.percentage <= maxPct);
-    res.json(out);
+  const totalSql = `
+    SELECT COUNT(DISTINCT a.date || '-' || a.hour) as total_hours
+    FROM attendance a
+    JOIN students s ON s.id = a.student_id
+    WHERE s.class_id = ? AND a.date BETWEEN date(?, ?) AND ?`;
+
+  db.get(totalSql, [class_id, endDate, offset, endDate], (totalErr, totalRow) => {
+    if (totalErr) return res.status(500).json({ message: 'DB error' });
+    const totalHours = Number(totalRow?.total_hours || 0);
+
+    const sql = `
+      SELECT s.id as student_id, s.name, s.usn,
+        SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) AS present_hours
+      FROM students s
+      LEFT JOIN attendance a ON a.student_id = s.id
+        AND a.date BETWEEN date(?, ?) AND ?
+      WHERE s.class_id = ?
+      GROUP BY s.id, s.name, s.usn
+      ORDER BY s.usn ASC`;
+
+    db.all(sql, [endDate, offset, endDate, class_id], (err, rows) => {
+      if (err) return res.status(500).json({ message: 'DB error' });
+      const out = rows.map(r => {
+        const present = Number((r.present_hours || 0).toFixed(2));
+        const total = Number((totalHours || 0).toFixed(2));
+        const absent = Number((total - present).toFixed(2));
+        const percentage = total ? Number(((present / total) * 100).toFixed(2)) : 0;
+        return {
+          student_id: r.student_id,
+          name: r.name,
+          usn: r.usn,
+          present,
+          absent,
+          total,
+          percentage
+        };
+      }).filter(r => r.percentage >= minPct && r.percentage <= maxPct);
+
+      res.json({
+        mode: 'range',
+        days,
+        start_date: null,
+        end_date: endDate,
+        total_hours: totalHours,
+        rows: out
+      });
+    });
   });
 });
 
@@ -297,6 +324,9 @@ app.get('/api/reports/download', auth, (req, res) => {
   const days = Number.isFinite(parsedPeriod) && parsedPeriod > 0
     ? parsedPeriod
     : (range === 'monthly' ? 30 : 7);
+  if (!Number.isFinite(days) || days < 1) {
+    return res.status(400).json({ message: 'period must be at least 1 day' });
+  }
 
   let minPct = 0;
   let maxPct = 100;
@@ -308,33 +338,46 @@ app.get('/api/reports/download', auth, (req, res) => {
     }
   }
 
-  db.get(
-    `SELECT class_name, section, subject_code FROM classes WHERE id = ? AND teacher_id = ?`,
-    [class_id, req.user.id],
-    (classErr, classRow) => {
-      if (classErr) return res.status(500).json({ message: 'DB error' });
-      if (!classRow) return res.status(404).json({ message: 'Class not found' });
+  const now = new Date();
+  const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const offset = `-${Math.max(days - 1, 0)} day`;
 
-      const sql = `
-        SELECT s.name, s.usn,
-          SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) AS present_hours,
-          COUNT(a.id) AS total_hours
-        FROM students s
-        LEFT JOIN attendance a ON a.student_id = s.id
-          AND a.date >= date('now', ?)
-        WHERE s.class_id = ?
-        GROUP BY s.id, s.name, s.usn
-        ORDER BY s.usn ASC`;
+  const totalSql = `
+    SELECT COUNT(DISTINCT a.date || '-' || a.hour) as total_hours
+    FROM attendance a
+    JOIN students s ON s.id = a.student_id
+    WHERE s.class_id = ? AND a.date BETWEEN date(?, ?) AND ?`;
 
-      db.all(sql, [`-${days} day`, class_id], (err, rows) => {
-        if (err) return res.status(500).json({ message: 'DB error' });
+  db.get(totalSql, [class_id, endDate, offset, endDate], (totalErr, totalRow) => {
+    if (totalErr) return res.status(500).json({ message: 'DB error' });
+    const totalHours = Number(totalRow?.total_hours || 0);
 
-        const data = rows.map(r => {
-          const presents = Number((r.present_hours || 0).toFixed(2));
-          const total = Number((r.total_hours || 0).toFixed(2));
-          const percentage = total ? Number(((presents / total) * 100).toFixed(2)) : 0;
-          return { ...r, presents, total, percentage };
-        }).filter(r => r.percentage >= minPct && r.percentage <= maxPct);
+    db.get(
+      `SELECT class_name, section, subject_code FROM classes WHERE id = ? AND teacher_id = ?`,
+      [class_id, req.user.id],
+      (classErr, classRow) => {
+        if (classErr) return res.status(500).json({ message: 'DB error' });
+        if (!classRow) return res.status(404).json({ message: 'Class not found' });
+
+        const sql = `
+          SELECT s.name, s.usn,
+            SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) AS present_hours
+          FROM students s
+          LEFT JOIN attendance a ON a.student_id = s.id
+            AND a.date BETWEEN date(?, ?) AND ?
+          WHERE s.class_id = ?
+          GROUP BY s.id, s.name, s.usn
+          ORDER BY s.usn ASC`;
+
+        db.all(sql, [endDate, offset, endDate, class_id], (err, rows) => {
+          if (err) return res.status(500).json({ message: 'DB error' });
+
+          const data = rows.map(r => {
+            const presents = Number((r.present_hours || 0).toFixed(2));
+            const total = Number((totalHours || 0).toFixed(2));
+            const percentage = total ? Number(((presents / total) * 100).toFixed(2)) : 0;
+            return { ...r, presents, total, percentage };
+          }).filter(r => r.percentage >= minPct && r.percentage <= maxPct);
 
         const filename = `attendance_report_${classRow.class_name}_${classRow.section}.pdf`
           .replace(/\s+/g, '_');
@@ -417,10 +460,11 @@ app.get('/api/reports/download', auth, (req, res) => {
           });
         }
 
-        doc.end();
-      });
-    }
-  );
+          doc.end();
+        });
+      }
+    );
+  });
 });
 
 function removeStudentFromClass(req, res) {

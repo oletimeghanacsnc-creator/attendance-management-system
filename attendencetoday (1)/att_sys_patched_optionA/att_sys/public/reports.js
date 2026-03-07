@@ -2,7 +2,6 @@ const token = localStorage.getItem('token');
 if (!token) location.href = '/login.html';
 
 const classSelect = document.getElementById('classSelect');
-const sectionSelect = document.getElementById('sectionSelect');
 const periodSelect = document.getElementById('period');
 const rangeSelect = document.getElementById('range');
 const tbody = document.getElementById('tbody');
@@ -43,23 +42,6 @@ function renderClassOptions(list) {
   ).join('');
 }
 
-function renderSectionOptions(list) {
-  if (!sectionSelect) return;
-  const sections = [...new Set(list.map(c => c.section).filter(Boolean))].sort();
-  sectionSelect.innerHTML =
-    '<option value="">All Sections</option>' +
-    sections.map(s => `<option value="${s}">${s}</option>`).join('');
-}
-
-function applySectionFilter() {
-  const section = sectionSelect ? sectionSelect.value : '';
-  const filtered = section ? allClasses.filter(c => String(c.section) === String(section)) : allClasses;
-  renderClassOptions(filtered);
-  if (filtered.length) {
-    classSelect.value = String(filtered[0].id);
-  }
-}
-
 async function loadClasses() {
   try {
     msg.style.color = '#5c6f89';
@@ -77,7 +59,6 @@ async function loadClasses() {
     }
 
     allClasses = data;
-    renderSectionOptions(data);
     renderClassOptions(data);
 
     msg.textContent = 'Select class, period, and range then click Load Report.';
@@ -177,11 +158,6 @@ async function downloadReportPdf() {
 
 loadBtn.addEventListener('click', loadReport);
 downloadBtn.addEventListener('click', downloadReportPdf);
-if (sectionSelect) {
-  sectionSelect.addEventListener('change', () => {
-    applySectionFilter();
-  });
-}
 loadClasses();
 
 const style = document.createElement('style');

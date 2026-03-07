@@ -29,12 +29,6 @@
           </select>
         </div>
         <div>
-          <label for="sectionSelect">Section</label>
-          <select id="sectionSelect">
-            <option value="">All Sections</option>
-          </select>
-        </div>
-        <div>
           <label for="period">Period</label>
           <select id="period">
             <option value="7">Last 7 days</option>
@@ -60,15 +54,7 @@
 
       <div class="table-wrap">
         <table class="table table-blue">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>USN</th>
-              <th>Total present classes</th>
-              <th>Total classes</th>
-              <th>Percentage (%)</th>
-            </tr>
-          </thead>
+          <thead id="reportHead"></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
